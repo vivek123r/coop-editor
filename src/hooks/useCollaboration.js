@@ -27,11 +27,6 @@ export function useCollaboration() {
     const handleUserLeft = (userData) => {
       console.log('User left event:', userData)
       setUsers(prev => prev.filter(u => u.id !== userData.id))
-      setCursors(prev => {
-        const newCursors = new Map(prev)
-        newCursors.delete(userData.id)
-        return newCursors
-      })
     }
 
     const handleRoomUsers = (roomUsers) => {
@@ -123,8 +118,6 @@ export function useCollaboration() {
     setCurrentRoom('')
     setCurrentUser(null)
     setUsers([])
-    setCursors(new Map())
-    setDocumentUpdates([])
     
     // Clear localStorage when leaving a room
     localStorage.removeItem('coopEditor_roomId')

@@ -4,6 +4,8 @@ import { useCollaboration } from './hooks/useCollaboration'
 import UserList from './components/UserList'
 import RoomSelector from './components/RoomSelector'
 import './App.css'
+import ChatBox from './components/ChatBox'
+import collaborationManager from './utils/collaborationManager';
 
 const getRandomColor = () => {
   const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA']
@@ -175,9 +177,16 @@ function App() {
               <div className="chat-content">
                 <h2>Welcome to the Room</h2>
                 <p>You are now connected with other users in this room.</p>
-                <p>This is a simplified version with only room management and user presence.</p>
+                <p>Use the chat box to communicate with other users.</p>
               </div>
             </div>
+            
+            {/* Chat box appears at the bottom-right of the workspace */}
+            <ChatBox 
+              users={users}
+              currentUser={currentUser}
+              collaborationManager={collaborationManager}
+            />
           </div>
         )}
       </main>

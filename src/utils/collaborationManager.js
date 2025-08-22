@@ -16,14 +16,39 @@ class CollaborationManager {
     // Socket is already created in socket.js
     console.log('Using pre-initialized socket connection')
     
+    // Clean up existing event handlers before reconnecting
+    this.cleanupEventHandlers()
+    
     if (!this.socket.connected) {
       console.log('Socket not connected, reconnecting...')
       this.socket.connect()
     }
 
     // Use the existing socket instance from socket.js
-
     this.setupEventHandlers()
+  }
+  
+  cleanupEventHandlers() {
+    if (this.socket) {
+      // Remove all socket listeners to prevent duplicates
+      this.socket.removeAllListeners('connect');
+      this.socket.removeAllListeners('disconnect');
+      this.socket.removeAllListeners('connection-confirmed');
+      this.socket.removeAllListeners('user-joined');
+      this.socket.removeAllListeners('user-left');
+      this.socket.removeAllListeners('document-updated');
+      this.socket.removeAllListeners('cursor-moved');
+      this.socket.removeAllListeners('room-users');
+      this.socket.removeAllListeners('global-user-count');
+      this.socket.removeAllListeners('document-shared');
+      this.socket.removeAllListeners('error');
+      this.socket.removeAllListeners('connect_error');
+      this.socket.removeAllListeners('room-join-error');
+      this.socket.removeAllListeners('chat-message');
+      this.socket.removeAllListeners('chat-history');
+      
+      console.log('Cleaned up all event handlers from socket');
+    }
   }
 
   setupEventHandlers() {
@@ -95,6 +120,18 @@ class CollaborationManager {
       console.error('Room join error:', data)
       this.emit('room-join-error', data)
     })
+    
+    // Listen for chat messages
+    this.socket.on('chat-message', (message) => {
+      console.log('Chat message received:', message)
+      this.emit('chat-message', message)
+    })
+    
+    // Listen for chat history when joining a room
+    this.socket.on('chat-history', (messages) => {
+      console.log('Chat history received:', messages)
+      this.emit('chat-history', messages)
+    })
   }
 
   async checkRoomExists(roomId) {
@@ -161,6 +198,19 @@ class CollaborationManager {
         documentData
       })
     }
+  }
+
+  sendChatMessage(message) {
+    if (this.socket && this.currentRoom && this.socket.connected) {
+      console.log('Sending chat message:', message);
+      this.socket.emit('chat-message', {
+        roomId: this.currentRoom,
+        message
+      });
+      return true;
+    }
+    console.warn('Cannot send message: socket not connected or no room joined');
+    return false;
   }
 
   // Event listener management

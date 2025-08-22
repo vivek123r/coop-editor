@@ -191,11 +191,23 @@ io.on('connection', (socket) => {
           id: roomId,
           users: new Map(),
           documents: new Map(),
+          messages: [],
           createdAt: new Date().toISOString(),
           leaderId: socket.id, // First user becomes room leader
           leaderName: userData.name
         })
         console.log(`🏆 Room ${roomId} created with leader: ${userData.name}`)
+      
+      // Initialize the room with messages array
+      rooms.set(roomId, {
+        id: roomId,
+        users: new Map(),
+        documents: new Map(),
+        messages: [], // Add this line to store chat history
+        createdAt: new Date().toISOString(),
+        leaderId: socket.id,
+        leaderName: userData.name
+      })
       }
       
       const room = rooms.get(roomId)
@@ -232,7 +244,9 @@ io.on('connection', (socket) => {
       if (roomDocuments.length > 0) {
         socket.emit('room-documents', roomDocuments)
       }
-      
+      if (room.messages && room.messages.length > 0) {
+        socket.emit('chat-history', room.messages);
+      }
       console.log(`Room ${roomId} now has ${room.users.size} users`)
       
     } catch (error) {
@@ -372,6 +386,53 @@ io.on('connection', (socket) => {
       console.error('Error sharing document:', error)
     }
   })
+  socket.on('chat-message', (data) => {
+  try {
+    const { roomId, message } = data;
+    
+    if (!roomId || !message) {
+      console.log('Invalid chat message data received');
+      return;
+    }
+    
+    // Get the room
+    if (!rooms.has(roomId)) {
+      console.log(`Chat message for non-existent room ${roomId}`);
+      return;
+    }
+    
+    const room = rooms.get(roomId);
+    
+    // Store the message in room history (optional, for message persistence)
+    if (!room.messages) {
+      room.messages = [];
+    }
+    
+    // Check for duplicate message IDs before adding to history
+    const isDuplicate = room.messages.some(m => m.id === message.id);
+    if (isDuplicate) {
+      console.log(`Skipping duplicate message with ID ${message.id}`);
+      return;
+    }
+    
+    // Limit history to last 100 messages
+    if (room.messages.length > 100) {
+      room.messages.shift();
+    }
+    
+    // Add message to room history
+    room.messages.push(message);
+    
+    console.log(`Chat message in room ${roomId} from ${message.sender.name}: ${message.text} (ID: ${message.id})`);
+    
+    // Broadcast to all users in the room except sender
+    socket.to(roomId).emit('chat-message', message);
+    
+  } catch (error) {
+    console.error('Error handling chat message:', error);
+  }
+  });
+
 
   // Handle typing indicators
   socket.on('typing-start', (data) => {
