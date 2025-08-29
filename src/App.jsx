@@ -6,7 +6,10 @@ import RoomSelector from './components/RoomSelector'
 import './App.css'
 import ChatBox from './components/ChatBox'
 import collaborationManager from './utils/collaborationManager';
-
+import YoutubePlayer from './components/videoplayer/YoutubePlayer';
+import Drawing from './components/drawing/drawing'
+import FileShare from './components/fileshare/fileshare';
+import Writing from './components/writing/writing';
 const getRandomColor = () => {
   const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA']
   return colors[Math.floor(Math.random() * colors.length)]
@@ -16,6 +19,7 @@ function App() {
   const [roomId, setRoomId] = useState('')
   const [userName, setUserName] = useState('')
   const [isAutoJoining, setIsAutoJoining] = useState(false)
+  const [activeTab, setActiveTab] = useState('video')
   
   const {
     isConnected,
@@ -172,15 +176,44 @@ function App() {
                 <p>You are connected with {users.length} users</p>
               </div>
             </aside>
-            
+            <div className='main-area'>
+            <div className='tab-bar'>
+              <button onClick={() => setActiveTab('write')} className={activeTab === 'write' ? 'active' : ''}>Write</button>
+              <button onClick={() => setActiveTab('draw')} className={activeTab === 'draw' ? 'active' : ''}>Draw</button>
+              <button onClick={() => setActiveTab('video')} className={activeTab === 'video' ? 'active' : ''}>Watch Video</button>
+              <button onClick={() => setActiveTab('file')} className={activeTab === 'file' ? 'active' : ''}>File Share</button>
+            </div>
             <div className="chat-area">
-              <div className="chat-content">
-                <h2>Welcome to the Room</h2>
-                <p>You are now connected with other users in this room.</p>
-                <p>Use the chat box to communicate with other users.</p>
+              <div>
+                <div className="chat-content">
+                  {activeTab === 'video' && (
+                    <div className='tab-content'>
+                      <h2>Welcome to the Room</h2>
+                      <p className="youtube-instructions">Paste a YouTube video URL below to watch videos together</p>
+                      <YoutubePlayer />
+                    </div>
+                  )
+                  }
+                  {activeTab === 'file' && (
+                    <div className='tab-content'>
+
+                      <FileShare />
+                    </div>
+                  )}
+                  {activeTab === 'draw' && (
+                    <div className='tab-content'>
+                      <Drawing />
+                    </div>
+                  )}
+                  {activeTab === 'write' && (
+                    <div className='tab-content'>
+                     <Writing roomId={currentRoom} currentUser={currentUser} />
+                    </div>
+                  )}
               </div>
             </div>
-            
+            </div>
+            </div>
             {/* Chat box appears at the bottom-right of the workspace */}
             <ChatBox 
               users={users}

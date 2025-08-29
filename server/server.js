@@ -254,6 +254,11 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: 'Failed to join room' })
     }
   })
+  // Handle writing updates
+  socket.on('writing-update', (msg) => {
+    socket.to(msg.roomId).emit('writing-update', msg);
+  });
+
 
   // Handle leaving a room
   socket.on('leave-room', ({ roomId, userId }) => {
@@ -431,6 +436,32 @@ io.on('connection', (socket) => {
   } catch (error) {
     console.error('Error handling chat message:', error);
   }
+  });
+  
+  // Handle custom messages for video player synchronization
+  socket.on('custom-message', (data) => {
+    try {
+      const { roomId, message } = data;
+      
+      if (!roomId || !message) {
+        console.log('Invalid custom message data received');
+        return;
+      }
+      
+      // Get the room
+      if (!rooms.has(roomId)) {
+        console.log(`Custom message for non-existent room ${roomId}`);
+        return;
+      }
+      
+      console.log(`Custom message in room ${roomId}:`, message);
+      
+      // Broadcast to all users in the room except sender
+      socket.to(roomId).emit('custom-message', message);
+      
+    } catch (error) {
+      console.error('Error handling custom message:', error);
+    }
   });
 
 

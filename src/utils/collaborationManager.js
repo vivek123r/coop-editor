@@ -46,6 +46,7 @@ class CollaborationManager {
       this.socket.removeAllListeners('room-join-error');
       this.socket.removeAllListeners('chat-message');
       this.socket.removeAllListeners('chat-history');
+      this.socket.removeAllListeners('custom-message');
       
       console.log('Cleaned up all event handlers from socket');
     }
@@ -132,6 +133,12 @@ class CollaborationManager {
       console.log('Chat history received:', messages)
       this.emit('chat-history', messages)
     })
+    
+    // Listen for custom messages (used by VideoPlayer for synchronization)
+    this.socket.on('custom-message', (message) => {
+      console.log('Custom message received:', message)
+      this.emit('custom-message', message)
+    })
   }
 
   async checkRoomExists(roomId) {
@@ -204,6 +211,19 @@ class CollaborationManager {
     if (this.socket && this.currentRoom && this.socket.connected) {
       console.log('Sending chat message:', message);
       this.socket.emit('chat-message', {
+        roomId: this.currentRoom,
+        message
+      });
+      return true;
+    }
+    console.warn('Cannot send message: socket not connected or no room joined');
+    return false;
+  }
+  
+  sendMessage(message) {
+    if (this.socket && this.currentRoom && this.socket.connected) {
+      console.log('Sending message:', message);
+      this.socket.emit('custom-message', {
         roomId: this.currentRoom,
         message
       });

@@ -277,6 +277,18 @@ body {
   color: #666;
   margin-bottom: 1rem;
   line-height: 1.5;
+  position: relative;
+  padding-top: 56px;
+}
+
+.youtube-instructions {
+  margin: 0 0 15px;
+  padding: 10px 15px;
+  background-color: #e8f0fe;
+  border-left: 4px solid #4285f4;
+  color: #174ea6;
+  border-radius: 4px;
+  font-size: 15px;
 }
 
 .room-details {
@@ -340,3 +352,41 @@ body {
     margin: 1rem;
   }
 }
+
+/* for main tabs in app */
+.main-area{
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+.tab-bar {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  background: #fff;
+  border-bottom: 1px solid #e5e5e7;
+  padding: 12px 0;
+  margin-bottom: 24px;
+  position: static;
+  z-index: 2;
+}
+
+.tab-bar button {
+  padding: 10px 22px;
+  border: none;
+  background: #f2f2f7;
+  color: #333;
+  font-size: 1rem;
+  font-weight: 500;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.tab-bar button.active {
+  background: #4285f4;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(66,133,244,0.08);
+}
+
