@@ -99,3 +99,22 @@
   font-size: 0.95rem;
   color: #666;
 }
+
+.writing-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  font-size: 1rem;
+  color: #666;
+  font-style: italic;
+}
+
+.document-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 15px;
+  color: #2196f3;
+  font-size: 0.9rem;
+}
