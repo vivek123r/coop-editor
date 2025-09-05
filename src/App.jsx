@@ -7,9 +7,11 @@ import './App.css'
 import ChatBox from './components/ChatBox'
 import collaborationManager from './utils/collaborationManager';
 import YoutubePlayer from './components/videoplayer/YoutubePlayer';
+import LocalVideoPlayer from './components/videoplayer/LocalVideoPlayer';
 import Drawing from './components/drawing/drawing'
 import FileShare from './components/fileshare/fileshare';
 import Writing from './components/writing/writing';
+import './components/videoplayer/VideoTabs.css';
 const getRandomColor = () => {
   const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA']
   return colors[Math.floor(Math.random() * colors.length)]
@@ -20,6 +22,7 @@ function App() {
   const [userName, setUserName] = useState('')
   const [isAutoJoining, setIsAutoJoining] = useState(false)
   const [activeTab, setActiveTab] = useState('video')
+  const [videoSubTab, setVideoSubTab] = useState('youtube') // 'youtube' or 'local'
   
   const {
     isConnected,
@@ -180,7 +183,7 @@ function App() {
             <div className='tab-bar'>
               <button onClick={() => setActiveTab('write')} className={activeTab === 'write' ? 'active' : ''}>Write</button>
               <button onClick={() => setActiveTab('draw')} className={activeTab === 'draw' ? 'active' : ''}>Draw</button>
-              <button onClick={() => setActiveTab('video')} className={activeTab === 'video' ? 'active' : ''}>Watch Video</button>
+              <button onClick={() => setActiveTab('video')} className={activeTab === 'video' ? 'active' : ''}>Videos</button>
               <button onClick={() => setActiveTab('file')} className={activeTab === 'file' ? 'active' : ''}>File Share</button>
             </div>
             <div className="chat-area">
@@ -188,21 +191,45 @@ function App() {
                 <div className="chat-content">
                   {activeTab === 'video' && (
                     <div className='tab-content'>
-                      <h2>Welcome to the Room</h2>
-                      <p className="youtube-instructions">Paste a YouTube video URL below to watch videos together</p>
-                      <YoutubePlayer />
+                      <h2>Video Sharing</h2>
+                      <div className="video-options-tabs">
+                        <button 
+                          className={`video-option-tab ${videoSubTab === 'youtube' ? 'active' : ''}`}
+                          onClick={() => setVideoSubTab('youtube')}
+                        >
+                          YouTube Videos
+                        </button>
+                        <button 
+                          className={`video-option-tab ${videoSubTab === 'local' ? 'active' : ''}`}
+                          onClick={() => setVideoSubTab('local')}
+                        >
+                          Share Local Videos
+                        </button>
+                      </div>
+                      
+                      {videoSubTab === 'youtube' && (
+                        <div className="video-option-content youtube-option">
+                          <p className="youtube-instructions">Paste a YouTube video URL below to watch videos together</p>
+                          <YoutubePlayer />
+                        </div>
+                      )}
+                      
+                      {videoSubTab === 'local' && (
+                        <div className="video-option-content local-option">
+                          <p className="local-video-instructions">Upload a video from your device to watch together with your friends</p>
+                          <LocalVideoPlayer roomId={currentRoom} currentUser={currentUser} />
+                        </div>
+                      )}
                     </div>
-                  )
-                  }
+                  )}
                   {activeTab === 'file' && (
                     <div className='tab-content'>
-
                       <FileShare />
                     </div>
                   )}
                   {activeTab === 'draw' && (
                     <div className='tab-content'>
-                      <Drawing />
+                      <Drawing roomId={currentRoom} currentUser={currentUser} />
                     </div>
                   )}
                   {activeTab === 'write' && (

@@ -46,7 +46,11 @@ const upload = multer({
     const allowedTypes = [
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'video/mp4',
+      'video/webm',
+      'video/ogg',
+      'video/quicktime'
     ]
     
     if (allowedTypes.includes(file.mimetype)) {
@@ -137,6 +141,41 @@ app.post('/api/upload', upload.single('document'), (req, res) => {
   } catch (error) {
     console.error('Upload error:', error)
     res.status(500).json({ error: 'Upload failed' })
+  }
+})
+
+// Endpoint for uploading video files
+app.post('/api/upload-video', upload.single('video'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No video file uploaded' })
+    }
+    
+    // Check if the file is a video
+    if (!req.file.mimetype.startsWith('video/')) {
+      return res.status(400).json({ error: 'Uploaded file is not a video' })
+    }
+    
+    const videoData = {
+      id: Date.now().toString(),
+      name: req.file.originalname,
+      type: req.file.mimetype,
+      size: req.file.size,
+      path: req.file.path,
+      url: `/${path.basename(req.file.path)}`, // URL to access the video
+      uploadedAt: new Date().toISOString()
+    }
+    
+    // Store video metadata
+    documents.set(videoData.id, videoData)
+    
+    res.json({
+      success: true,
+      video: videoData
+    })
+  } catch (error) {
+    console.error('Video upload error:', error)
+    res.status(500).json({ error: 'Video upload failed' })
   }
 })
 

@@ -1,0 +1,32 @@
+.video-options-tabs {
+  display: flex;
+  border-bottom: 1px solid #ccc;
+  margin-bottom: 20px;
+}
+
+.video-option-tab {
+  padding: 10px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.video-option-tab:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.video-option-tab.active {
+  border-bottom: 2px solid #3498db;
+  color: #3498db;
+}
+
+.video-option-content {
+  padding: 10px 0;
+}
+
+.video-option-content.local-option {
+  display: none;
+}
