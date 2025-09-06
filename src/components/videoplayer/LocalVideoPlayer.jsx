@@ -394,8 +394,8 @@ function LocalVideoPlayer({ roomId, currentUser }) {
       }
     };
     
-    collaborationManager.addMessageListener(handleMessage);
-    return () => collaborationManager.removeMessageListener(handleMessage);
+    collaborationManager.on('custom-message', handleMessage);
+    return () => collaborationManager.off('custom-message', handleMessage);
   }, [roomId, currentUser, isHost, videoUrl]);
   
   // Load video from localStorage when component mounts

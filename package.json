@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "fabric": "^6.7.1",
+    "fabric": "^5.5.2",
     "lucide-react": "^0.537.0",
     "mammoth": "^1.10.0",
     "pptxgenjs": "^4.0.1",

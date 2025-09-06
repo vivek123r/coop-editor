@@ -1,9 +1,14 @@
 import { useState, useEffect, useRef } from "react";
-import { Canvas, PencilBrush, SprayBrush, CircleBrush, IText, Rect, Circle, Line, Triangle } from 'fabric';
 import collaborationManager from "../../utils/collaborationManager";
 import "./drawing.css";
 
+// fabric.js is loaded from CDN in index.html and available as a global variable
+const fabric = window.fabric;
+
 export default function Drawing({ roomId, currentUser }) {
+  // Reference to the HTML canvas element
+  const canvasElRef = useRef(null);
+  // Reference to store the fabric.js canvas instance
   const canvasRef = useRef(null);
   const historyRef = useRef([]);
   const historyPositionRef = useRef(-1);
@@ -24,20 +29,53 @@ export default function Drawing({ roomId, currentUser }) {
     console.log("Cleared local storage for room drawing:", roomId);
   };
 
+  // Initialize the canvas when component mounts
   useEffect(() => {
     // Wait for DOM to be ready
-    if (!canvasRef.current) return;
+    if (!canvasElRef.current) {
+      console.log("Canvas element not ready");
+      return;
+    }
+    
+    // Check if canvas is already initialized
+    if (canvasRef.current) {
+      console.log("Canvas already initialized, skipping initialization");
+      return;
+    }
+    
+    console.log("Initializing fabric canvas");
+    
+    // Make sure fabric is available in the global scope
+    if (!window.fabric) {
+      console.error("Fabric.js not loaded! Please check the script in index.html");
+      return;
+    }
     
     // Create canvas
-    const canvas = new Canvas(canvasRef.current, {
+    const canvas = new fabric.Canvas(canvasElRef.current, {
       isDrawingMode: true,
       width: 900,
       height: 600,
       backgroundColor: "white"
     });
+    
+    // Store canvas instance in our ref
+    canvasRef.current = canvas;
+    
+    // Custom object ID generator to ensure unique IDs across users
+    fabric.Object.prototype.toObject = (function(originalFn) {
+      return function(propertiesToInclude) {
+        const obj = originalFn.call(this, propertiesToInclude);
+        if (!this.id) {
+          this.id = `obj_${currentUser?.id || 'local'}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        }
+        obj.id = this.id;
+        return obj;
+      };
+    })(fabric.Object.prototype.toObject);
 
-    // Default brush
-    canvas.freeDrawingBrush = new PencilBrush(canvas);
+    // Default brush - initialize with pencil brush
+    canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
     canvas.freeDrawingBrush.width = brushSize;
     canvas.freeDrawingBrush.color = brushColor;
 
@@ -60,6 +98,9 @@ export default function Drawing({ roomId, currentUser }) {
 
     // Request drawing data from other users when joining
     if (roomId && currentUser) {
+      console.log("Requesting drawing data from room:", roomId);
+      
+      // Send a message to request the current drawing state
       collaborationManager.sendMessage({
         type: 'drawing-data-request',
         roomId,
@@ -70,31 +111,108 @@ export default function Drawing({ roomId, currentUser }) {
     }
 
     // Store objects added to history for undo/redo
-    canvas.on('object:added', () => {
+    canvas.on('object:added', (e) => {
       if (ignoreSyncRef.current) return;
       
-      const json = canvas.toJSON();
-      const position = historyPositionRef.current;
-      
-      // Remove any forward history
-      historyRef.current = historyRef.current.slice(0, position + 1);
-      historyRef.current.push(json);
-      historyPositionRef.current++;
-      
-      // Save to localStorage
-      saveToLocalStorage(json);
-      
-      // Broadcast changes
-      if (roomId && currentUser) {
-        broadcastDrawingData(json);
+      // Assign a unique ID to the object if it doesn't have one
+      if (e.target && !e.target.id) {
+        e.target.id = `obj_${currentUser.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       }
+      
+      // Add a small delay to avoid too frequent updates
+      clearTimeout(canvas.syncTimeout);
+      canvas.syncTimeout = setTimeout(() => {
+        const json = canvas.toJSON();
+        const position = historyPositionRef.current;
+        
+        // Remove any forward history
+        historyRef.current = historyRef.current.slice(0, position + 1);
+        historyRef.current.push(json);
+        historyPositionRef.current++;
+        
+        // Save to localStorage
+        saveToLocalStorage(json);
+        
+        // Broadcast changes
+        if (roomId && currentUser) {
+          broadcastDrawingData(json);
+        }
+      }, 300); // 300ms delay
     });
 
-    // Store ref
-    canvasRef.current = canvas;
+    // Listen for object modifications
+    canvas.on('object:modified', (e) => {
+      if (ignoreSyncRef.current) return;
+      
+      console.log("Object modified on canvas");
+      
+      // Add a small delay to avoid too frequent updates
+      clearTimeout(canvas.modifyTimeout);
+      canvas.modifyTimeout = setTimeout(() => {
+        const json = canvas.toJSON();
+        const position = historyPositionRef.current;
+        
+        // Remove any forward history
+        historyRef.current = historyRef.current.slice(0, position + 1);
+        historyRef.current.push(json);
+        historyPositionRef.current++;
+        
+        // Save to localStorage
+        saveToLocalStorage(json);
+        
+        // Broadcast changes
+        if (roomId && currentUser) {
+          console.log("Broadcasting drawing update after modification");
+          broadcastDrawingData(json);
+        }
+      }, 300); // 300ms delay
+    });
+    
+    // Listen for object removals
+    canvas.on('object:removed', (e) => {
+      if (ignoreSyncRef.current) return;
+      
+      console.log("Object removed from canvas");
+      
+      // Add a small delay to avoid too frequent updates
+      clearTimeout(canvas.removeTimeout);
+      canvas.removeTimeout = setTimeout(() => {
+        const json = canvas.toJSON();
+        const position = historyPositionRef.current;
+        
+        // Remove any forward history
+        historyRef.current = historyRef.current.slice(0, position + 1);
+        historyRef.current.push(json);
+        historyPositionRef.current++;
+        
+        // Save to localStorage
+        saveToLocalStorage(json);
+        
+        // Broadcast changes
+        if (roomId && currentUser) {
+          console.log("Broadcasting drawing update after removal");
+          broadcastDrawingData(json);
+        }
+      }, 300); // 300ms delay
+    });
+    
+    // Add current state to history
+    const initialJson = canvas.toJSON();
+    historyRef.current = [initialJson];
+    historyPositionRef.current = 0;
     
     return () => {
-      canvas.dispose();
+      console.log("Disposing canvas");
+      // Clean up event listeners to prevent memory leaks
+      if (canvas) {
+        canvas.off('object:added');
+        canvas.off('object:modified');
+        canvas.off('object:removed');
+        // Dispose of the canvas
+        canvas.dispose();
+      }
+      // Remove the reference
+      canvasRef.current = null;
     }
   }, [roomId, currentUser]);
 
@@ -112,41 +230,123 @@ export default function Drawing({ roomId, currentUser }) {
   
   // Broadcast drawing data to other users
   const broadcastDrawingData = (jsonData) => {
-    if (!roomId || !currentUser) return;
+    if (!roomId || !currentUser) {
+      console.log("Cannot broadcast: missing roomId or currentUser");
+      return;
+    }
     
-    collaborationManager.sendMessage({
-      type: 'drawing-data-update',
-      roomId,
-      userId: currentUser.id,
-      userName: currentUser.name,
-      drawingData: typeof jsonData === 'string' ? jsonData : JSON.stringify(jsonData),
-      timestamp: new Date().toISOString()
-    });
+    console.log("Broadcasting drawing update to room:", roomId);
+    
+    try {
+      // Process JSON data to ensure all objects have IDs before sending
+      const processedData = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+      
+      // Make sure all objects have IDs
+      if (processedData.objects && Array.isArray(processedData.objects)) {
+        processedData.objects.forEach((obj, index) => {
+          if (!obj.id) {
+            obj.id = `obj_${currentUser.id}_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`;
+          }
+        });
+      }
+      
+      // Convert back to string
+      const drawingDataStr = JSON.stringify(processedData);
+      
+      collaborationManager.sendMessage({
+        type: 'drawing-data-update',
+        roomId,
+        userId: currentUser.id,
+        userName: currentUser.name,
+        drawingData: drawingDataStr,
+        timestamp: new Date().toISOString()
+      });
+      
+      console.log("Drawing update sent successfully");
+    } catch (error) {
+      console.error("Error broadcasting drawing data:", error);
+    }
   };
 
   // Handle incoming messages for collaborative drawing
   useEffect(() => {
-    if (!roomId || !currentUser || !canvasRef.current) return;
+    if (!roomId || !currentUser || !canvasRef.current) {
+      console.log("Not setting up drawing message handlers - missing dependencies");
+      return;
+    }
+    
+    console.log("Setting up drawing message handlers for room:", roomId);
     
     const handleMessage = (msg) => {
       if (msg.roomId !== roomId) return;
       
+      console.log("Received message in drawing component:", msg.type);
+      
       // Handle drawing data updates
-      if (msg.type === 'drawing-data-update' && msg.userId !== currentUser.id) {
+      if (msg.type === 'drawing-data-update') {
+        // Skip processing our own broadcasts
+        if (msg.userId === currentUser.id) {
+          console.log("Skipping our own drawing broadcast");
+          return;
+        }
+        
+        console.log(`Received drawing update from ${msg.userName}`);
+        
+        // Set flag to prevent triggering object:added event during loading
+        ignoreSyncRef.current = true;
+          
         try {
-          ignoreSyncRef.current = true;
-          canvasRef.current.loadFromJSON(msg.drawingData, () => {
-            canvasRef.current.renderAll();
-            ignoreSyncRef.current = false;
+          const canvas = canvasRef.current;
+          if (!canvas) {
+            console.error("Canvas not initialized yet");
+            return;
+          }
+          
+          // Parse the drawing data if it's a string
+          const drawingData = typeof msg.drawingData === 'string' 
+            ? JSON.parse(msg.drawingData) 
+            : msg.drawingData;
+          
+          // Instead of replacing the entire canvas, merge the incoming objects
+          const currentObjects = canvas.getObjects();
+          const currentIds = new Set(currentObjects.map(obj => obj.id || ''));
+          
+          // Process the incoming objects
+          if (drawingData.objects && Array.isArray(drawingData.objects)) {
+            // For each incoming object
+            drawingData.objects.forEach(incomingObj => {
+              // Skip if no ID or object already exists
+              const objId = incomingObj.id || `obj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+              
+              // If we don't have this object yet, add it
+              if (!currentIds.has(objId)) {
+                fabric.util.enlivenObjects([incomingObj], (objects) => {
+                  if (objects[0] && canvas) {
+                    objects[0].id = objId;
+                    canvas.add(objects[0]);
+                    canvas.renderAll();
+                    console.log(`Added new object with ID: ${objId}`);
+                  }
+                });
+              }
+            });
             
-            // Update history
-            const json = canvasRef.current.toJSON();
+            // Render the canvas after all objects are added
+            canvas.renderAll();
+            
+            // Update history with the new state
+            const json = canvas.toJSON();
             historyRef.current.push(json);
             historyPositionRef.current = historyRef.current.length - 1;
             
-            // Update localStorage
+            // Update localStorage with timestamp
             saveToLocalStorage(json);
-          });
+          }
+          
+          // Clear flag after processing is complete
+          setTimeout(() => {
+            ignoreSyncRef.current = false;
+          }, 100);
         } catch (err) {
           console.error("Error applying drawing update:", err);
           ignoreSyncRef.current = false;
@@ -155,6 +355,7 @@ export default function Drawing({ roomId, currentUser }) {
       
       // Handle drawing data request
       else if (msg.type === 'drawing-data-request' && msg.userId !== currentUser.id) {
+        if (!canvasRef.current) return;
         const json = canvasRef.current.toJSON();
         collaborationManager.sendMessage({
           type: 'drawing-data-update',
@@ -165,11 +366,95 @@ export default function Drawing({ roomId, currentUser }) {
           timestamp: new Date().toISOString()
         });
       }
+      
+      // Handle new user joining the drawing area
+      else if (msg.type === 'drawing-user-joined' && msg.userId !== currentUser.id) {
+        console.log(`User ${msg.userName} joined the drawing area - sending current canvas state`);
+        
+        // Add a small random delay to avoid multiple users sending at the same time
+        setTimeout(() => {
+          if (!canvasRef.current) return;
+          const json = canvasRef.current.toJSON();
+          collaborationManager.sendMessage({
+            type: 'drawing-data-update',
+            roomId,
+            userId: currentUser.id,
+            userName: currentUser.name,
+            drawingData: JSON.stringify(json),
+            timestamp: new Date().toISOString()
+          });
+        }, Math.random() * 1000); // Random delay up to 1 second
+      }
+      
+      // Handle clear canvas message
+      else if (msg.type === 'drawing-clear-canvas' && msg.userId !== currentUser.id) {
+        console.log("Received clear canvas message from another user");
+        
+        if (!canvasRef.current) return;
+        
+        // Set flag to prevent triggering object:added events
+        ignoreSyncRef.current = true;
+        
+        // Clear the canvas and set white background
+        canvasRef.current.clear().setBackgroundColor("white", () => {
+          canvasRef.current.renderAll();
+          
+          // Load any objects from the message (likely none)
+          if (msg.drawingData) {
+            try {
+              const data = typeof msg.drawingData === 'string' 
+                ? JSON.parse(msg.drawingData) 
+                : msg.drawingData;
+              
+              canvasRef.current.loadFromJSON(data, () => {
+                canvasRef.current.renderAll();
+              });
+            } catch (err) {
+              console.error("Error loading cleared canvas state:", err);
+            }
+          }
+          
+          // Update history
+          const json = canvasRef.current.toJSON();
+          historyRef.current = [json];
+          historyPositionRef.current = 0;
+          
+          // Update localStorage
+          saveToLocalStorage(json);
+          
+          // Reset the ignoreSyncRef flag after a delay
+          setTimeout(() => {
+            ignoreSyncRef.current = false;
+          }, 100);
+        });
+      }
     };
     
+    // Make sure collaborationManager is ready and connected
+    if (!collaborationManager.connected) {
+      console.log("CollaborationManager not connected, connecting now");
+      collaborationManager.connect();
+    }
+    
+    // Register for custom messages
+    console.log("Registering for custom-message events");
     collaborationManager.on('custom-message', handleMessage);
-    return () => collaborationManager.off('custom-message', handleMessage);
-  }, [roomId, currentUser]);
+    
+    // Announce our presence to get the latest drawing
+    collaborationManager.sendMessage({
+      type: 'drawing-user-joined',
+      roomId,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Cleanup event handler when component unmounts
+    return () => {
+      console.log("Cleaning up drawing message handlers");
+      collaborationManager.off('custom-message', handleMessage);
+    };
+  }, [roomId, currentUser, canvasRef.current]);
 
   const setBrush = (type) => {
     const canvas = canvasRef.current;
@@ -181,16 +466,16 @@ export default function Drawing({ roomId, currentUser }) {
     
     switch (type) {
       case "pencil":
-        canvas.freeDrawingBrush = new PencilBrush(canvas);
+        canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
         break;
       case "spray":
-        canvas.freeDrawingBrush = new SprayBrush(canvas);
+        canvas.freeDrawingBrush = new fabric.SprayBrush(canvas);
         break;
       case "circle":
-        canvas.freeDrawingBrush = new CircleBrush(canvas);
+        canvas.freeDrawingBrush = new fabric.CircleBrush(canvas);
         break;
       case "eraser":
-        canvas.freeDrawingBrush = new PencilBrush(canvas);
+        canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
         canvas.freeDrawingBrush.color = "#FFFFFF"; // White for eraser
         setBrushColor("#FFFFFF");
         break;
@@ -238,7 +523,7 @@ export default function Drawing({ roomId, currentUser }) {
     canvas.isDrawingMode = false;
     setActiveMode('select');
     
-    const text = new IText("Type here", {
+    const text = new fabric.IText("Type here", {
       left: 100,
       top: 100,
       fontFamily: "Arial",
@@ -267,7 +552,7 @@ export default function Drawing({ roomId, currentUser }) {
     setActiveMode('select');
     
     let obj;
-    if (shape === "rect") obj = new Rect({ 
+    if (shape === "rect") obj = new fabric.Rect({ 
       left: 150, 
       top: 150, 
       width: 100, 
@@ -276,7 +561,7 @@ export default function Drawing({ roomId, currentUser }) {
       stroke: '#000',
       strokeWidth: 1
     });
-    if (shape === "circle") obj = new Circle({ 
+    if (shape === "circle") obj = new fabric.Circle({ 
       left: 200, 
       top: 200, 
       radius: 50, 
@@ -284,11 +569,11 @@ export default function Drawing({ roomId, currentUser }) {
       stroke: '#000',
       strokeWidth: 1 
     });
-    if (shape === "line") obj = new Line([50, 100, 200, 100], { 
+    if (shape === "line") obj = new fabric.Line([50, 100, 200, 100], { 
       stroke: brushColor,
       strokeWidth: brushSize 
     });
-    if (shape === "triangle") obj = new Triangle({
+    if (shape === "triangle") obj = new fabric.Triangle({
       left: 150,
       top: 150,
       width: 100,
@@ -317,21 +602,40 @@ export default function Drawing({ roomId, currentUser }) {
     if (!canvasRef.current) return;
     
     if (confirm('Are you sure you want to clear the canvas? This cannot be undone.')) {
+      // Set the ignoreSyncRef flag to true to prevent triggering object:added events
+      ignoreSyncRef.current = true;
+      
       canvasRef.current.clear().setBackgroundColor("white", () => {
         canvasRef.current.renderAll();
+        
+        // Reset history
+        const json = canvasRef.current.toJSON();
+        historyRef.current = [json];
+        historyPositionRef.current = 0;
+        
+        // Save to localStorage with new timestamp
+        saveToLocalStorage(json);
+        
+        // Set active mode back to pencil
+        setBrush('pencil');
+        
+        // Send a special clear-canvas message to all users
+        if (roomId && currentUser) {
+          collaborationManager.sendMessage({
+            type: 'drawing-clear-canvas',
+            roomId,
+            userId: currentUser.id,
+            userName: currentUser.name,
+            drawingData: JSON.stringify(json),
+            timestamp: new Date().toISOString()
+          });
+        }
+        
+        // Reset the ignoreSyncRef flag after a small delay
+        setTimeout(() => {
+          ignoreSyncRef.current = false;
+        }, 100);
       });
-      
-      // Reset history
-      const json = canvasRef.current.toJSON();
-      historyRef.current = [json];
-      historyPositionRef.current = 0;
-      
-      // Save and broadcast
-      saveToLocalStorage(json);
-      broadcastDrawingData(json);
-      
-      // Set active mode back to pencil
-      setBrush('pencil');
     }
   };
 
@@ -368,13 +672,32 @@ export default function Drawing({ roomId, currentUser }) {
       historyPositionRef.current = position - 1;
       const previousState = historyRef.current[position - 1];
       
+      // Set flag to prevent triggering object:added events
       ignoreSyncRef.current = true;
+      
       canvasRef.current.loadFromJSON(previousState, () => {
         canvasRef.current.renderAll();
-        ignoreSyncRef.current = false;
         
-        // Broadcast the change
-        broadcastDrawingData(previousState);
+        // Save to localStorage with a new timestamp
+        saveToLocalStorage(previousState);
+        
+        // Broadcast the change with current timestamp
+        if (roomId && currentUser) {
+          collaborationManager.sendMessage({
+            type: 'drawing-data-update',
+            roomId,
+            userId: currentUser.id,
+            userName: currentUser.name,
+            drawingData: JSON.stringify(previousState),
+            timestamp: new Date().toISOString(),
+            action: 'undo'
+          });
+        }
+        
+        // Reset the ignoreSyncRef flag after a delay
+        setTimeout(() => {
+          ignoreSyncRef.current = false;
+        }, 100);
       });
     }
   };
@@ -387,13 +710,32 @@ export default function Drawing({ roomId, currentUser }) {
       historyPositionRef.current = position + 1;
       const nextState = historyRef.current[position + 1];
       
+      // Set flag to prevent triggering object:added events
       ignoreSyncRef.current = true;
+      
       canvasRef.current.loadFromJSON(nextState, () => {
         canvasRef.current.renderAll();
-        ignoreSyncRef.current = false;
         
-        // Broadcast the change
-        broadcastDrawingData(nextState);
+        // Save to localStorage with a new timestamp
+        saveToLocalStorage(nextState);
+        
+        // Broadcast the change with current timestamp
+        if (roomId && currentUser) {
+          collaborationManager.sendMessage({
+            type: 'drawing-data-update',
+            roomId,
+            userId: currentUser.id,
+            userName: currentUser.name,
+            drawingData: JSON.stringify(nextState),
+            timestamp: new Date().toISOString(),
+            action: 'redo'
+          });
+        }
+        
+        // Reset the ignoreSyncRef flag after a delay
+        setTimeout(() => {
+          ignoreSyncRef.current = false;
+        }, 100);
       });
     }
   };
@@ -403,6 +745,9 @@ export default function Drawing({ roomId, currentUser }) {
     
     const activeObjects = canvasRef.current.getActiveObjects();
     if (activeObjects.length > 0) {
+      // Set flag to prevent triggering object:added events during deletion
+      ignoreSyncRef.current = true;
+      
       activeObjects.forEach(obj => {
         canvasRef.current.remove(obj);
       });
@@ -412,12 +757,30 @@ export default function Drawing({ roomId, currentUser }) {
       
       // Update history
       const json = canvasRef.current.toJSON();
+      historyRef.current = historyRef.current.slice(0, historyPositionRef.current + 1);
       historyRef.current.push(json);
       historyPositionRef.current = historyRef.current.length - 1;
       
-      // Save and broadcast
+      // Save to localStorage with a new timestamp
       saveToLocalStorage(json);
-      broadcastDrawingData(json);
+      
+      // Broadcast the change with current timestamp and specific action type
+      if (roomId && currentUser) {
+        collaborationManager.sendMessage({
+          type: 'drawing-data-update',
+          roomId,
+          userId: currentUser.id,
+          userName: currentUser.name,
+          drawingData: JSON.stringify(json),
+          timestamp: new Date().toISOString(),
+          action: 'delete'
+        });
+      }
+      
+      // Reset the ignoreSyncRef flag after a delay
+      setTimeout(() => {
+        ignoreSyncRef.current = false;
+      }, 100);
     }
   };
 
@@ -536,7 +899,7 @@ export default function Drawing({ roomId, currentUser }) {
 
       {/* Canvas container */}
       <div className="canvas-container">
-        <canvas ref={canvasRef} className="drawing-canvas" />
+        <canvas ref={canvasElRef} width="900" height="600" className="drawing-canvas" />
       </div>
       
       {/* Collaborative info */}
