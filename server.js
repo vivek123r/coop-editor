@@ -127,8 +127,13 @@ function handleUserLeaveRoom(socket, roomId) {
 // Serve static files from the React build directory
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// The "catchall" handler: send back React's index.html file
-app.get('*', (req, res) => {
+// Root path handler
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+// The "catchall" handler: send back React's index.html file for client-side routing
+app.get("/*", (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
