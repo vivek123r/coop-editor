@@ -12,6 +12,11 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const server = createServer(app);
 
+// Add a health check endpoint for monitoring
+app.get('/healthz', (req, res) => {
+  res.status(200).send('OK');
+});
+
 // Create Socket.IO server
 const io = new Server(server, {
   cors: {
@@ -127,19 +132,35 @@ function handleUserLeaveRoom(socket, roomId) {
 // Serve static files from the React build directory
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// Root path handler
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
-
-// The "catchall" handler: send back React's index.html file for client-side routing
-app.get("/*", (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+// Use a middleware approach for the catchall handler instead of a route pattern
+// This will handle all routes and send back the React index.html for client-side routing
+app.use((req, res, next) => {
+  // Skip API routes or other routes that shouldn't be handled by the SPA
+  if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+    return next();
+  }
+  
+  // Send the index.html for all other routes
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'), (err) => {
+    if (err) {
+      console.error('Error sending file:', err);
+      res.status(500).send('Error loading application');
+    }
+  });
 });
 
 // Get port from environment variable
 const PORT = process.env.PORT || 8080;
 
+// Error handling for uncaught exceptions - log but don't crash in production
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  // In production, we may want to continue running rather than exit
+});
+
+// Start the server
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
+}).on('error', (err) => {
+  console.error('Server error:', err);
 });
