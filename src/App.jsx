@@ -41,6 +41,10 @@ function App() {
     if (!userName) {
       setUserName('User-' + Math.random().toString(36).substr(2, 5))
     }
+    
+    // Log connection information for debugging
+    console.log('App initialized - Environment:', import.meta.env.PROD ? 'Production' : 'Development')
+    console.log('App initialized - Origin:', window.location.origin)
   }, [])
 
   // Auto-rejoin feature disabled as requested

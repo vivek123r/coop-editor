@@ -12,18 +12,39 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const server = createServer(app);
 
+// Add CORS middleware for API endpoints
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  next();
+});
+
 // Add a health check endpoint for monitoring
 app.get('/healthz', (req, res) => {
   res.status(200).send('OK');
 });
 
+// Add API endpoint to check if room exists
+app.get('/api/rooms/:roomId/exists', (req, res) => {
+  const { roomId } = req.params;
+  const roomExists = rooms[roomId] !== undefined;
+  
+  res.json({
+    exists: roomExists,
+    userCount: roomExists ? rooms[roomId].users.length : 0,
+    leader: roomExists ? rooms[roomId].leader : null
+  });
+});
+
 // Create Socket.IO server
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: "*", // Allow any origin in production
     methods: ["GET", "POST"],
     credentials: true
-  }
+  },
+  transports: ['websocket', 'polling'],
+  pingTimeout: 60000, // Longer ping timeout for Render.com
 });
 
 // Track connected users and rooms

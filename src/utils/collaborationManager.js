@@ -12,19 +12,18 @@ class CollaborationManager {
     console.log(`🏗️ CollaborationManager instance created: ${this.instanceId}`)
   }
 
-  connect(serverUrl = 'http://localhost:3002') {
+  connect() {
     // Socket is already created in socket.js
     console.log('Using pre-initialized socket connection')
     
     // Clean up existing event handlers before reconnecting
     this.cleanupEventHandlers()
     
-    if (!this.socket.connected) {
-      console.log('Socket not connected, reconnecting...')
-      this.socket.connect()
-    }
+    // Connect to socket - it will use the URL configured in socket.js
+    console.log('Connecting to socket...')
+    this.socket.connect()
 
-    // Use the existing socket instance from socket.js
+    // Set up event handlers
     this.setupEventHandlers()
   }
   
@@ -143,7 +142,12 @@ class CollaborationManager {
 
   async checkRoomExists(roomId) {
     try {
-      const response = await fetch(`http://localhost:3002/api/rooms/${roomId}/exists`)
+      // Determine the base URL dynamically
+      const baseURL = import.meta.env.PROD 
+        ? window.location.origin 
+        : 'http://localhost:3002';
+      
+      const response = await fetch(`${baseURL}/api/rooms/${roomId}/exists`)
       const data = await response.json()
       console.log(`🔍 Room ${roomId} exists:`, data.exists, `(${data.userCount} users)`)
       return data

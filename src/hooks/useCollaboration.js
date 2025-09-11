@@ -57,7 +57,8 @@ export function useCollaboration() {
 
     // NOW connect to real Socket.io server
     console.log('🚀 Initializing collaboration manager...')
-    collaborationManager.connect('http://localhost:3002')
+    // Don't hardcode URL - it will use the one from socket.js
+    collaborationManager.connect()
     
     // Check initial connection status
     setTimeout(() => {

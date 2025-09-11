@@ -9,7 +9,7 @@ console.log('Socket connecting to:', SOCKET_URL);
 
 // Create a single socket instance with more robust reconnection settings for Render.com
 const socket = io(SOCKET_URL, {
-  autoConnect: true,
+  autoConnect: false, // Changed to false - we'll connect manually
   transports: ['websocket', 'polling'],
   reconnection: true,
   reconnectionAttempts: Infinity, // Keep trying to reconnect
