@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: coop-editor
+    runtime: node
+    plan: free # Explicitly specify the free plan
+    buildCommand: npm install && npm run build
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production

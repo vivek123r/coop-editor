@@ -1,15 +1,21 @@
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = 'http://localhost:3002';
+// Use the current domain in production, localhost in development
+const SOCKET_URL = import.meta.env.PROD 
+  ? window.location.origin 
+  : 'http://localhost:3002';
 
-// Create a single socket instance
+console.log('Socket connecting to:', SOCKET_URL);
+
+// Create a single socket instance with more robust reconnection settings for Render.com
 const socket = io(SOCKET_URL, {
   autoConnect: true,
   transports: ['websocket', 'polling'],
   reconnection: true,
-  reconnectionAttempts: 5,
+  reconnectionAttempts: Infinity, // Keep trying to reconnect
   reconnectionDelay: 1000,
-  timeout: 5000
+  reconnectionDelayMax: 5000,
+  timeout: 20000 // Longer timeout for Render's sleep/wake cycle
 });
 
 // Debug socket events

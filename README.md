@@ -19,6 +19,24 @@ A modern web application for real-time collaborative editing of PDF, PowerPoint,
 - Node.js (version 16 or higher)
 - npm or yarn package manager
 
+## 🌐 Free Deployment on Render.com
+
+You can deploy this application completely free on Render.com without requiring a credit card:
+
+1. Create an account on [Render.com](https://render.com)
+2. From your Render dashboard, click "New" and select "Web Service"
+3. Connect your GitHub account and select this repository
+4. Configure the deployment with these settings:
+   - **Name**: coop-editor (or your preferred name)
+   - **Environment**: Node
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `node server.js`
+   - **Plan**: Free
+5. Click "Create Web Service" to deploy the application
+6. Wait for the deployment to complete (about 5-10 minutes)
+
+The application will be accessible at `https://your-app-name.onrender.com`. The free tier will put your app to sleep after 15 minutes of inactivity, but it automatically wakes up when someone visits.
+
 ### Installation
 
 1. Clone the repository:

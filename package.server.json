@@ -1,0 +1,11 @@
+{
+  "name": "coop-editor-server",
+  "version": "1.0.0",
+  "description": "Server for collaborative document editor",
+  "main": "server.js",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  }
+}
