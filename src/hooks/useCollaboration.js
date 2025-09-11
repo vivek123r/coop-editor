@@ -17,10 +17,16 @@ export function useCollaboration() {
 
     const handleUserJoined = (userData) => {
       console.log('User joined event:', userData)
+      // Ensure userData has a name property
+      const validUserData = { 
+        ...userData,
+        name: userData.name || 'Anonymous' 
+      }
+      
       setUsers(prev => {
-        const exists = prev.find(u => u.id === userData.id)
+        const exists = prev.find(u => u.id === validUserData.id)
         if (exists) return prev
-        return [...prev, { ...userData, isOnline: true }]
+        return [...prev, { ...validUserData, isOnline: true }]
       })
     }
 
@@ -31,8 +37,28 @@ export function useCollaboration() {
 
     const handleRoomUsers = (roomUsers) => {
       console.log('🏠 Room users received:', roomUsers)
-      console.log('🏠 Setting users state to:', roomUsers.map(user => ({ ...user, isOnline: true })))
-      setUsers(roomUsers.map(user => ({ ...user, isOnline: true })))
+      
+      // Ensure each user has a valid name
+      const validRoomUsers = roomUsers.map(user => {
+        // If user is a string (just username), convert to object
+        if (typeof user === 'string') {
+          return {
+            id: `user-${Math.random().toString(36).substr(2, 9)}`,
+            name: user || 'Anonymous',
+            isOnline: true
+          };
+        }
+        
+        // If user is an object but missing name
+        return {
+          ...user,
+          name: user.name || 'Anonymous',
+          isOnline: true
+        };
+      });
+      
+      console.log('🏠 Setting users state to:', validRoomUsers)
+      setUsers(validRoomUsers)
     }
 
     const handleGlobalUserCount = (data) => {

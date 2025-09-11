@@ -56,10 +56,13 @@ function App() {
   }, [])
 
   const handleCreateRoom = async (roomId, roomName, isCreating = true) => {
+    // Ensure userName is not empty
+    const validUserName = userName || `User-${Math.random().toString(36).substr(2, 5)}`;
+    
     const userData = {
       id: Date.now().toString(),
-      name: userName,
-      avatar: userName.charAt(0).toUpperCase(),
+      name: validUserName,
+      avatar: validUserName.charAt(0).toUpperCase(),
       color: getRandomColor(),
       joinedAt: new Date().toISOString()
     }
@@ -68,10 +71,13 @@ function App() {
   }
 
   const handleJoinExistingRoom = async (roomId, isCreating = false) => {
+    // Ensure userName is not empty
+    const validUserName = userName || `User-${Math.random().toString(36).substr(2, 5)}`;
+    
     const userData = {
       id: Date.now().toString(),
-      name: userName,
-      avatar: userName.charAt(0).toUpperCase(),
+      name: validUserName,
+      avatar: validUserName.charAt(0).toUpperCase(),
       color: getRandomColor(),
       joinedAt: new Date().toISOString()
     }
@@ -80,11 +86,14 @@ function App() {
   }
 
   const handleJoinRoom = () => {
-    if (roomId && userName) {
+    if (roomId) {
+      // Ensure userName is not empty
+      const validUserName = userName || `User-${Math.random().toString(36).substr(2, 5)}`;
+      
       const userData = {
         id: Date.now().toString(),
-        name: userName,
-        avatar: userName.charAt(0).toUpperCase(),
+        name: validUserName,
+        avatar: validUserName.charAt(0).toUpperCase(),
         color: getRandomColor(),
         joinedAt: new Date().toISOString()
       }

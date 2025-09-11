@@ -60,6 +60,11 @@ io.on('connection', (socket) => {
     const { roomId, userData } = data;
     if (!roomId || !userData) return;
 
+    // Ensure userData has a valid name
+    if (!userData.name) {
+      userData.name = 'Anonymous';
+    }
+
     // Add user to room
     socket.join(roomId);
     users[socket.id] = { ...userData, socketId: socket.id };
@@ -68,17 +73,22 @@ io.on('connection', (socket) => {
     if (!rooms[roomId]) {
       rooms[roomId] = {
         id: roomId,
-        users: [userData.name],
+        users: [userData],
+        userIds: [userData.id],
         leader: userData.name
       };
       console.log(`🏆 Room ${roomId} created with leader: ${userData.name}`);
     } else {
-      rooms[roomId].users.push(userData.name);
+      // Only add user if they're not already in the room
+      if (!rooms[roomId].userIds.includes(userData.id)) {
+        rooms[roomId].users.push(userData);
+        rooms[roomId].userIds.push(userData.id);
+      }
     }
 
-    // Notify room of new user
+    // Notify room of new user with full user objects
     io.to(roomId).emit('room-users', rooms[roomId].users);
-    console.log(`Added user ${userData.name} to room ${roomId}. Room now has: [${rooms[roomId].users}]`);
+    console.log(`Added user ${userData.name} to room ${roomId}. Room now has: [${rooms[roomId].users.map(u => u.name).join(', ')}]`);
     
     // Emit user-joined event to everyone in the room
     io.to(roomId).emit('user-joined', userData);
@@ -125,9 +135,12 @@ function handleUserLeaveRoom(socket, roomId) {
   if (!user || !rooms[roomId]) return;
 
   const room = rooms[roomId];
-  if (room.users.includes(user.name)) {
+  const userIndex = room.userIds ? room.userIds.indexOf(user.id) : -1;
+  
+  if (userIndex !== -1) {
     // Remove user from room
-    room.users = room.users.filter(u => u !== user.name);
+    room.users.splice(userIndex, 1);
+    room.userIds.splice(userIndex, 1);
     
     // Delete empty rooms
     if (room.users.length === 0) {
@@ -136,7 +149,7 @@ function handleUserLeaveRoom(socket, roomId) {
     } else {
       // Update room leader if needed
       if (room.leader === user.name) {
-        room.leader = room.users[0];
+        room.leader = room.users[0].name || 'Anonymous';
         console.log(`New leader of room ${roomId}: ${room.leader}`);
       }
       
