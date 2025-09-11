@@ -15,11 +15,11 @@ function UserList({ users, currentUser }) {
               className="user-avatar"
               style={{ backgroundColor: user.color || '#007aff' }}
             >
-              {user.avatar || user.name.charAt(0).toUpperCase()}
+              {user.avatar || (user.name ? user.name.charAt(0).toUpperCase() : '?')}
             </div>
             <div className="user-details">
               <span className="user-name">
-                {user.name}
+                {user.name || 'Anonymous'}
                 {user.id === currentUser?.id && ' (You)'}
               </span>
               <span className="user-status">
