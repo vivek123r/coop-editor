@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Clock, Globe } from 'lucide-react';
 import collaborationManager from '../../utils/collaborationManager';
-import './Writing.css';
+import './writing.css';
 
 function Writing({ roomId, currentUser }) {
   const [content, setContent] = useState('');
