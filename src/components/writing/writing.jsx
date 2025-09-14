@@ -102,18 +102,22 @@ function Writing({ roomId, currentUser }) {
     setContent(newValue);
     setLastSaved(new Date(timestamp));
 
-    // Send to others
+    // Send to others - but not if we're just applying an update we received
     if (!ignoreNextUpdate.current) {
+      console.log("Broadcasting text change to room:", roomId);
       collaborationManager.sendMessage({
         type: 'writing-update',
         roomId,
-        userId: currentUser?.id,
-        userName: currentUser?.name,
+        userId: currentUser?.id || 'local-user',
+        userName: currentUser?.name || 'Anonymous',
         content: newValue,
         documentTitle,
         timestamp: timestamp,
       });
+    } else {
+      console.log("Skipping broadcast of received update");
     }
+    // Reset the ignore flag for next update
     ignoreNextUpdate.current = false;
   };
 
@@ -125,11 +129,12 @@ function Writing({ roomId, currentUser }) {
     setDocumentTitle(newTitle);
     setLastSaved(new Date(timestamp));
     
+    console.log("Broadcasting title change to room:", roomId);
     collaborationManager.sendMessage({
       type: 'writing-update',
       roomId,
-      userId: currentUser?.id,
-      userName: currentUser?.name,
+      userId: currentUser?.id || 'local-user',
+      userName: currentUser?.name || 'Anonymous',
       documentTitle: newTitle,
       content, // Also send current content to ensure sync
       timestamp: timestamp,
@@ -170,9 +175,16 @@ function Writing({ roomId, currentUser }) {
   // Listen for updates from others
   useEffect(() => {
     const handleIncoming = (msg) => {
+      // Only process messages for our room
+      if (!msg || !msg.roomId || msg.roomId !== roomId) {
+        return;
+      }
+
+      console.log(`Received ${msg.type} message:`, msg);
+
       // Handle content request response OR broadcast
       if ((msg.type === 'writing-content-response' || msg.type === 'writing-content-broadcast') && msg.roomId === roomId) {
-        console.log("Received writing content:", msg.content?.substr(0, 50) + "...");
+        console.log("Received writing content:", msg.content ? `${msg.content.substr(0, 50)}...` : "empty");
         
         // Check if received content is newer than local storage
         const localTimestamp = localStorage.getItem(getLocalStorageKey('timestamp'));
@@ -183,8 +195,12 @@ function Writing({ roomId, currentUser }) {
         if (shouldUpdate || !localTimestamp) {
           console.log("Using network content (newer than local storage)");
           ignoreNextUpdate.current = true;
-          setContent(msg.content || '');
-          setDocumentTitle(msg.documentTitle || 'Untitled Document');
+          if (msg.content !== undefined) {
+            setContent(msg.content || '');
+          }
+          if (msg.documentTitle !== undefined) {
+            setDocumentTitle(msg.documentTitle || 'Untitled Document');
+          }
           setLastSaved(msgTimestamp);
           setIsLoading(false);
           
@@ -202,7 +218,7 @@ function Writing({ roomId, currentUser }) {
         }
       }
       // Handle content request from other users
-      else if (msg.type === 'writing-content-request' && msg.roomId === roomId && msg.userId !== currentUser?.id) {
+      else if (msg.type === 'writing-content-request' && msg.userId !== currentUser?.id) {
         console.log("Someone requested writing content, sending current state");
         
         // Add a small random delay to avoid multiple simultaneous responses
@@ -211,7 +227,7 @@ function Writing({ roomId, currentUser }) {
             type: 'writing-content-response',
             roomId,
             userId: currentUser?.id,
-            userName: currentUser?.name,
+            userName: currentUser?.name || 'Anonymous',
             content,
             documentTitle,
             timestamp: new Date().toISOString(),
@@ -220,19 +236,19 @@ function Writing({ roomId, currentUser }) {
         }, Math.random() * 500); // Random delay up to 500ms
       }
       // Handle new user announcement - respond with current content
-      else if (msg.type === 'writing-user-joined' && msg.roomId === roomId && msg.userId !== currentUser?.id) {
-        console.log(`User ${msg.userName} joined the writing area - will send content`);
+      else if (msg.type === 'writing-user-joined' && msg.userId !== currentUser?.id) {
+        console.log(`User ${msg.userName || 'Anonymous'} joined the writing area - will send content`);
         
         // Add a small delay to avoid multiple users responding at once
         setTimeout(() => {
           // Only send if we have content
           if (content || documentTitle !== 'Untitled Document') {
-            console.log(`Sending content to new user ${msg.userName}`);
+            console.log(`Sending content to new user ${msg.userName || 'Anonymous'}`);
             collaborationManager.sendMessage({
               type: 'writing-content-broadcast',
               roomId,
               userId: currentUser?.id,
-              userName: currentUser?.name,
+              userName: currentUser?.name || 'Anonymous',
               content,
               documentTitle,
               timestamp: new Date().toISOString(),
@@ -242,42 +258,54 @@ function Writing({ roomId, currentUser }) {
         }, Math.random() * 1000); // Random delay up to 1 second
       }
       // Handle regular updates
-      else if (msg.type === 'writing-update' && msg.roomId === roomId) {
-        // Don't process own updates
-        if (msg.userId !== currentUser?.id) {
-          console.log("Received writing update from another user");
-          ignoreNextUpdate.current = true;
-          
-          if (msg.content !== undefined) {
-            setContent(msg.content);
-          }
-          if (msg.documentTitle) {
-            setDocumentTitle(msg.documentTitle);
-          }
-          setLastSaved(new Date(msg.timestamp));
-          
-          // Always update localStorage with the latest content from other users
-          if (msg.content !== undefined) {
-            localStorage.setItem(getLocalStorageKey('content'), msg.content);
-          }
-          if (msg.documentTitle) {
-            localStorage.setItem(getLocalStorageKey('title'), msg.documentTitle);
-          }
-          localStorage.setItem(getLocalStorageKey('timestamp'), msg.timestamp || new Date().toISOString());
+      else if (msg.type === 'writing-update' && msg.userId !== currentUser?.id) {
+        // Don't process own updates (double check)
+        console.log("Received writing update from another user");
+        
+        // Set flag to ignore next update (avoid echo)
+        ignoreNextUpdate.current = true;
+        
+        // Apply the received changes
+        if (msg.content !== undefined) {
+          console.log("Updating content from other user:", msg.content.substr(0, 50) + "...");
+          setContent(msg.content);
         }
+        
+        if (msg.documentTitle !== undefined) {
+          console.log("Updating document title from other user:", msg.documentTitle);
+          setDocumentTitle(msg.documentTitle);
+        }
+        
+        // Update last saved timestamp
+        if (msg.timestamp) {
+          setLastSaved(new Date(msg.timestamp));
+        }
+        
+        // Always update localStorage with the latest content from other users
+        if (msg.content !== undefined) {
+          localStorage.setItem(getLocalStorageKey('content'), msg.content);
+        }
+        if (msg.documentTitle !== undefined) {
+          localStorage.setItem(getLocalStorageKey('title'), msg.documentTitle);
+        }
+        localStorage.setItem(getLocalStorageKey('timestamp'), msg.timestamp || new Date().toISOString());
       }
     };
 
-    if (collaborationManager && roomId) {
-      collaborationManager.on('custom-message', handleIncoming);
+    // Make sure we have the required parameters
+    if (!collaborationManager || !roomId) {
+      console.log("Missing collaborationManager or roomId, not setting up message handlers");
+      return;
     }
     
+    console.log("Setting up custom-message handler for writing component in room:", roomId);
+    collaborationManager.on('custom-message', handleIncoming);
+    
     return () => {
-      if (collaborationManager) {
-        collaborationManager.off('custom-message', handleIncoming);
-      }
+      console.log("Removing custom-message handler for writing component");
+      collaborationManager.off('custom-message', handleIncoming);
     };
-  }, [roomId, currentUser, content, documentTitle]);
+  }, [roomId, currentUser]);
 
   return (
     <div className="writing-component">

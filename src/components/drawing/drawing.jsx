@@ -230,8 +230,8 @@ export default function Drawing({ roomId, currentUser }) {
   
   // Broadcast drawing data to other users
   const broadcastDrawingData = (jsonData) => {
-    if (!roomId || !currentUser) {
-      console.log("Cannot broadcast: missing roomId or currentUser");
+    if (!roomId) {
+      console.log("Cannot broadcast: missing roomId");
       return;
     }
     
@@ -245,19 +245,22 @@ export default function Drawing({ roomId, currentUser }) {
       if (processedData.objects && Array.isArray(processedData.objects)) {
         processedData.objects.forEach((obj, index) => {
           if (!obj.id) {
-            obj.id = `obj_${currentUser.id}_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`;
+            obj.id = `obj_${currentUser?.id || 'local'}_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`;
           }
         });
+        
+        console.log(`Broadcasting ${processedData.objects.length} objects to room`);
       }
       
       // Convert back to string
       const drawingDataStr = JSON.stringify(processedData);
       
+      // Send to other clients in the room
       collaborationManager.sendMessage({
         type: 'drawing-data-update',
         roomId,
-        userId: currentUser.id,
-        userName: currentUser.name,
+        userId: currentUser?.id || 'local-user',
+        userName: currentUser?.name || 'Anonymous',
         drawingData: drawingDataStr,
         timestamp: new Date().toISOString()
       });
@@ -278,19 +281,19 @@ export default function Drawing({ roomId, currentUser }) {
     console.log("Setting up drawing message handlers for room:", roomId);
     
     const handleMessage = (msg) => {
-      if (msg.roomId !== roomId) return;
+      if (!msg || !msg.roomId || msg.roomId !== roomId) return;
       
       console.log("Received message in drawing component:", msg.type);
       
       // Handle drawing data updates
       if (msg.type === 'drawing-data-update') {
         // Skip processing our own broadcasts
-        if (msg.userId === currentUser.id) {
+        if (msg.userId === currentUser?.id) {
           console.log("Skipping our own drawing broadcast");
           return;
         }
         
-        console.log(`Received drawing update from ${msg.userName}`);
+        console.log(`Received drawing update from ${msg.userName || 'Anonymous'}`);
         
         // Set flag to prevent triggering object:added event during loading
         ignoreSyncRef.current = true;
@@ -303,13 +306,28 @@ export default function Drawing({ roomId, currentUser }) {
           }
           
           // Parse the drawing data if it's a string
-          const drawingData = typeof msg.drawingData === 'string' 
-            ? JSON.parse(msg.drawingData) 
-            : msg.drawingData;
+          let drawingData;
+          try {
+            drawingData = typeof msg.drawingData === 'string' 
+              ? JSON.parse(msg.drawingData) 
+              : msg.drawingData;
+            
+            if (!drawingData || !drawingData.objects) {
+              console.error("Invalid drawing data received:", drawingData);
+              ignoreSyncRef.current = false;
+              return;
+            }
+          } catch (parseErr) {
+            console.error("Error parsing drawing data:", parseErr);
+            ignoreSyncRef.current = false;
+            return;
+          }
           
           // Instead of replacing the entire canvas, merge the incoming objects
           const currentObjects = canvas.getObjects();
           const currentIds = new Set(currentObjects.map(obj => obj.id || ''));
+          
+          console.log(`Processing ${drawingData.objects.length} objects from incoming drawing data`);
           
           // Process the incoming objects
           if (drawingData.objects && Array.isArray(drawingData.objects)) {
@@ -324,7 +342,6 @@ export default function Drawing({ roomId, currentUser }) {
                   if (objects[0] && canvas) {
                     objects[0].id = objId;
                     canvas.add(objects[0]);
-                    canvas.renderAll();
                     console.log(`Added new object with ID: ${objId}`);
                   }
                 });
@@ -341,6 +358,8 @@ export default function Drawing({ roomId, currentUser }) {
             
             // Update localStorage with timestamp
             saveToLocalStorage(json);
+            
+            console.log("Successfully processed drawing update");
           }
           
           // Clear flag after processing is complete
@@ -354,34 +373,52 @@ export default function Drawing({ roomId, currentUser }) {
       }
       
       // Handle drawing data request
-      else if (msg.type === 'drawing-data-request' && msg.userId !== currentUser.id) {
-        if (!canvasRef.current) return;
+      else if (msg.type === 'drawing-data-request' && msg.userId !== currentUser?.id) {
+        console.log("Received drawing data request from another user");
+        
+        if (!canvasRef.current) {
+          console.warn("Canvas not ready, can't respond to drawing data request");
+          return;
+        }
+        
+        console.log("Sending drawing data in response to request");
         const json = canvasRef.current.toJSON();
-        collaborationManager.sendMessage({
-          type: 'drawing-data-update',
-          roomId,
-          userId: currentUser.id,
-          userName: currentUser.name,
-          drawingData: JSON.stringify(json),
-          timestamp: new Date().toISOString()
-        });
+        
+        // Add a small delay to avoid network congestion
+        setTimeout(() => {
+          collaborationManager.sendMessage({
+            type: 'drawing-data-update',
+            roomId,
+            userId: currentUser?.id || 'local-user',
+            userName: currentUser?.name || 'Anonymous',
+            drawingData: JSON.stringify(json),
+            timestamp: new Date().toISOString(),
+            requesterId: msg.userId
+          });
+        }, Math.random() * 300); // Random delay up to 300ms
       }
       
       // Handle new user joining the drawing area
-      else if (msg.type === 'drawing-user-joined' && msg.userId !== currentUser.id) {
-        console.log(`User ${msg.userName} joined the drawing area - sending current canvas state`);
+      else if (msg.type === 'drawing-user-joined' && msg.userId !== currentUser?.id) {
+        console.log(`User ${msg.userName || 'Anonymous'} joined the drawing area - sending current canvas state`);
         
         // Add a small random delay to avoid multiple users sending at the same time
         setTimeout(() => {
-          if (!canvasRef.current) return;
+          if (!canvasRef.current) {
+            console.warn("Canvas not ready, can't send drawing data to new user");
+            return;
+          }
+          
+          console.log("Sending current canvas state to new user");
           const json = canvasRef.current.toJSON();
           collaborationManager.sendMessage({
             type: 'drawing-data-update',
             roomId,
-            userId: currentUser.id,
-            userName: currentUser.name,
+            userId: currentUser?.id || 'local-user',
+            userName: currentUser?.name || 'Anonymous',
             drawingData: JSON.stringify(json),
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            targetUserId: msg.userId
           });
         }, Math.random() * 1000); // Random delay up to 1 second
       }

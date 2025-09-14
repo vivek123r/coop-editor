@@ -21,10 +21,30 @@ class CollaborationManager {
     
     // Connect to socket - it will use the URL configured in socket.js
     console.log('Connecting to socket...')
+    
+    // Check if socket is already connected
+    if (this.socket.connected) {
+      console.log('Socket is already connected, skipping reconnection')
+      this.isConnected = true
+      
+      // Still set up event handlers
+      this.setupEventHandlers()
+      
+      return true
+    }
+    
+    // Connect and handle reconnection
     this.socket.connect()
+    
+    // Set up auto-reconnect with exponential backoff
+    this.socket.io.reconnectionDelayMax(10000) // Maximum delay between reconnection attempts (10 seconds)
+    this.socket.io.reconnectionDelay(1000) // Initial delay (1 second)
+    this.socket.io.reconnectionAttempts(10) // Maximum number of reconnection attempts
 
     // Set up event handlers
     this.setupEventHandlers()
+    
+    return true
   }
   
   cleanupEventHandlers() {
@@ -56,12 +76,40 @@ class CollaborationManager {
       this.isConnected = true
       console.log('✅ Connected to collaboration server - Socket ID:', this.socket.id)
       this.emit('connection-status', { connected: true })
+      
+      // If we were in a room before disconnecting, rejoin it
+      if (this.currentRoom && this.currentUser) {
+        console.log(`Reconnected - Rejoining room ${this.currentRoom}`)
+        
+        this.socket.emit('join-room', { 
+          roomId: this.currentRoom, 
+          userData: this.currentUser,
+          isCreating: false,
+          isReconnecting: true
+        })
+        
+        // Emit reconnect event so components can resend their state
+        this.emit('reconnected', { 
+          roomId: this.currentRoom,
+          user: this.currentUser
+        })
+      }
     })
 
-    this.socket.on('disconnect', () => {
+    this.socket.on('disconnect', (reason) => {
       this.isConnected = false
-      console.log('Disconnected from collaboration server')
-      this.emit('connection-status', { connected: false })
+      console.log('Disconnected from collaboration server:', reason)
+      this.emit('connection-status', { connected: false, reason })
+      
+      // If the disconnection was unintentional, try to reconnect
+      if (reason === 'io server disconnect' || reason === 'transport close' || reason === 'ping timeout') {
+        console.log('Trying to reconnect automatically...')
+        
+        // Add delay to avoid immediate reconnection attempts
+        setTimeout(() => {
+          this.socket.connect()
+        }, 1500)
+      }
     })
 
     this.socket.on('connection-confirmed', (data) => {
@@ -225,16 +273,54 @@ class CollaborationManager {
   }
   
   sendMessage(message) {
-    if (this.socket && this.currentRoom && this.socket.connected) {
-      console.log('Sending message:', message);
+    if (!this.socket) {
+      console.error('Cannot send message: socket instance not available');
+      return false;
+    }
+    
+    if (!this.currentRoom) {
+      console.warn('Cannot send message: no room joined');
+      return false;
+    }
+    
+    // Check if the socket is connected
+    if (!this.socket.connected) {
+      console.warn('Socket disconnected - attempting to reconnect before sending message');
+      
+      // Queue the message to be sent when reconnected
+      const queuedMessage = {
+        roomId: this.currentRoom,
+        ...message
+      };
+      
+      // Try to reconnect
+      this.socket.connect();
+      
+      // Add a listener that will send the message once reconnected
+      const sendAfterReconnect = () => {
+        console.log('Reconnected - sending queued message');
+        this.socket.emit('custom-message', queuedMessage);
+        this.socket.off('connect', sendAfterReconnect);
+      };
+      
+      this.socket.once('connect', sendAfterReconnect);
+      
+      return false; // Message was queued, not sent immediately
+    }
+    
+    // If we get here, we have a socket, room, and are connected
+    console.log('Sending message:', message.type);
+    
+    try {
       this.socket.emit('custom-message', {
         roomId: this.currentRoom,
-        message
+        ...message
       });
       return true;
+    } catch (error) {
+      console.error('Error sending message:', error);
+      return false;
     }
-    console.warn('Cannot send message: socket not connected or no room joined');
-    return false;
   }
 
   // Event listener management
